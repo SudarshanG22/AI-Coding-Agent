@@ -15,7 +15,7 @@ def get_tasks():
 
 @task_routes.route("/tasks", methods=["POST"])
 def create_task():
-    data = request.get_json()
+    data = request.get_json(silent=True)
     title = data.get("title")
     description = data.get("description", "")
 
