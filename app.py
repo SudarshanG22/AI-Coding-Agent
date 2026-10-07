@@ -1,5 +1,6 @@
 import streamlit as st
 from pathlib import Path
+from login_demo import login_demo
 
 from agent.agent import (
     analyze_task,
@@ -19,6 +20,23 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ============================================================
+# PAGE NAVIGATION
+# ============================================================
+
+with st.sidebar:
+    page = st.radio(
+        "📌 Select Page",
+        [
+            "🤖 AI Coding Agent",
+            "🔐 Login Demo"
+        ]
+    )
+
+if page == "🔐 Login Demo":
+    login_demo()
+    st.stop()
 
 
 # ============================================================
