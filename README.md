@@ -1,115 +1,56 @@
 # 🤖 AI Coding Agent
 
-An AI-powered coding assistant that understands a small existing codebase, analyzes a developer's natural-language request, identifies relevant files, generates code changes, displays a unified diff for review, applies approved changes, and automatically runs tests to validate the implementation.
+An AI-powered coding assistant that understands a small existing codebase, identifies relevant files, generates code changes from natural-language developer requests, shows the proposed diff for review, applies approved changes, and validates them using automated tests.
 
-The project uses Google Gemini as the LLM and Streamlit as the web interface.
-
----
-
-## 🚀 Project Overview
-
-The AI Coding Agent is designed to demonstrate an end-to-end agentic coding workflow.
-
-A developer can enter a request such as:
-
-> Add input validation to the Tasks API and write tests for it.
-
-The agent then:
-
-1. Understands the developer's request.
-2. Reads the existing project files.
-3. Identifies the relevant files.
-4. Creates an implementation plan.
-5. Generates the required code changes.
-6. Generates a unified diff.
-7. Shows the proposed changes for review.
-8. Applies the changes only after approval.
-9. Runs the project's pytest test suite.
-10. Displays the final validation result.
-
-This provides a simple but complete AI-assisted software development workflow.
+The project is built as a small end-to-end AI coding agent using Streamlit and Google's Gemini API.
 
 ---
 
-## ✨ Key Features
+## 🚀 Live Demo
 
-- 🧠 Natural-language coding task understanding
-- 📂 Automatic codebase inspection
-- 🎯 Relevant file identification
-- 📝 AI-generated implementation plan
-- 🤖 Gemini-powered code generation
-- 🔍 Unified diff generation
-- 👀 Human review before applying changes
-- ✏️ Controlled file modification
-- 🧪 Automated pytest execution
-- ✅ Test result reporting
-- 🖥️ Streamlit web interface
-- 🔐 Environment-variable based API key handling
-- 🛡️ Validation of AI-generated file changes
+**Deployed Application:**
+
+https://ai-coding-agent-bfa2s5yihfnjqj7zsxcnc2c.streamlit.app
 
 ---
 
-## 🏗️ System Architecture
+## 📂 GitHub Repository
+
+**Source Code:**
+
+https://github.com/SudarshanG22/AI-Coding-Agent
+
+---
+
+## ✨ Features
+
+### 🤖 AI Coding Agent
+
+- Accepts coding tasks in natural language.
+- Understands the requested change.
+- Reads the sample project codebase.
+- Identifies relevant files.
+- Generates a step-by-step implementation plan.
+- Generates proposed code changes.
+- Displays the changes as a diff.
+- Requires user approval before applying changes.
+- Applies approved changes.
+- Runs automated pytest validation.
+- Displays test results.
+
+### 🔐 Login Demo
+
+A separate interactive page demonstrates the result of the coding-agent workflow.
+
+The Login Demo validates:
+
+- Username
+- Password
+- Alphabetic-only usernames
+
+Examples:
 
 ```text
-                    ┌─────────────────────┐
-                    │     Developer       │
-                    │ Natural Language    │
-                    │       Task          │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   Streamlit UI      │
-                    │      app.py         │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │    AI Agent         │
-                    │    agent.py         │
-                    └──────────┬──────────┘
-                               │
-                 ┌─────────────┴─────────────┐
-                 ▼                           ▼
-        ┌─────────────────┐        ┌─────────────────┐
-        │  Codebase       │        │    Gemini       │
-        │    Reader       │        │      LLM        │
-        │ file_reader.py  │        │ gemini_service  │
-        └────────┬────────┘        └────────┬────────┘
-                 │                          │
-                 └────────────┬─────────────┘
-                              ▼
-                    ┌─────────────────────┐
-                    │ Change Generator    │
-                    │ change_generator.py  │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   Diff Generator    │
-                    │ diff_generator.py   │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │ Human Review &      │
-                    │ Approval            │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │    File Writer      │
-                    │  file_writer.py     │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │    Test Runner      │
-                    │  test_runner.py     │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │  Validation Result  │
-                    └─────────────────────┘
+Sudarshan       → ✅ Login successful
+Sudarshan123    → ❌ Username validation error
+Sudarshan@      → ❌ Username validation error
