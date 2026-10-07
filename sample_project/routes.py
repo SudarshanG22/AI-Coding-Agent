@@ -43,3 +43,25 @@ def create_task():
         "title": title,
         "description": description
     }), 201
+
+@task_routes.route("/login", methods=["POST"])
+def login():
+
+    data = request.get_json(silent=True)
+
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    username = data.get("username", "")
+    password = data.get("password", "")
+
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+
+    if not username.isalpha():
+        return jsonify({"error": "Username must contain only alphabetic characters"}), 400
+
+    return jsonify({
+        "message": "User logged in successfully",
+        "username": username
+    }), 200

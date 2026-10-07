@@ -23,7 +23,7 @@ class GeminiService:
             api_key=api_key
         )
 
-        self.model = "gemini-2.5-flash"
+        self.model = "gemini-3.1-flash-lite"
 
 
     def generate_response(self, prompt):
