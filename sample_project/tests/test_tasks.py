@@ -20,18 +20,17 @@ def test_login_username_validation(client):
 
     # Username with numbers
     response = client.post('/login', json={'username': 'John123', 'password': 'password123'})
-    assert response.status_code == 400
-    assert response.json == {'error': 'Username must contain only alphabetic characters'}
+    assert response.status_code == 200
 
     # Username with special characters
     response = client.post('/login', json={'username': 'John@Doe', 'password': 'password123'})
     assert response.status_code == 400
-    assert response.json == {'error': 'Username must contain only alphabetic characters'}
+    assert response.json == {'error': 'Username must contain only alphanumeric characters'}
 
     # Username with spaces
     response = client.post('/login', json={'username': 'John Doe', 'password': 'password123'})
     assert response.status_code == 400
-    assert response.json == {'error': 'Username must contain only alphabetic characters'}
+    assert response.json == {'error': 'Username must contain only alphanumeric characters'}
 
     # Empty username
     response = client.post('/login', json={'username': '', 'password': 'password123'})

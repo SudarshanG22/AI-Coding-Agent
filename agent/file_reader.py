@@ -20,11 +20,30 @@ class CodebaseReader:
             ".css"
         }
 
+        ignored_directories = {
+            ".git",
+            ".github",
+            "venv",
+            ".venv",
+            "__pycache__",
+            "node_modules",
+            ".pytest_cache"
+        }
+
         files = []
 
         for file_path in self.project_path.rglob("*"):
 
-            if file_path.is_file() and file_path.suffix in allowed_extensions:
+            if any(
+                ignored_dir in file_path.parts
+                for ignored_dir in ignored_directories
+            ):
+                continue
+
+            if (
+                file_path.is_file()
+                and file_path.suffix.lower() in allowed_extensions
+            ):
                 files.append(file_path)
 
         return files

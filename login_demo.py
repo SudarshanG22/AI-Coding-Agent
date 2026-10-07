@@ -44,9 +44,9 @@ def login_demo():
         if not username or not password:
             st.error("❌ Username and password are required.")
 
-        elif not username.isalpha():
+        elif not username.isalnum():
             st.error(
-                "❌ Username must contain only alphabetic characters."
+                "❌ Username must contain only alphanumeric characters."
             )
 
         else:

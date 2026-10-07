@@ -301,29 +301,27 @@ CODE RULES
 
 5. Include complete replacement content for every modified file.
 
-6. Do not actually modify files yourself.
+6. Make the SMALLEST possible change required by the developer request.
 
-7. Generated code must be practical and runnable.
+7. Preserve every existing function, route, import, variable,
+   database operation, and behavior that is unrelated to the request.
 
-8. Include all required imports.
+8. NEVER rewrite or simplify an entire file when only a small
+   part of the file needs to change.
 
-9. Do not reference undefined variables.
+9. NEVER remove existing functionality unless the developer
+   explicitly requested its removal.
 
-10. Do not reference undefined functions.
+10. Before returning each modified file, compare it mentally
+    with the original file and make sure unrelated code remains
+    unchanged.
 
-11. Do not reference undefined classes.
+11. If the requested change affects only one condition,
+    expression, function, or test, modify only that part while
+    preserving the rest of the file exactly.
 
-12. Do not reference undefined fixtures.
-
-13. Do not generate placeholder code.
-
-14. Do not use TODO.
-
-15. Do not use pass as placeholder code.
-
-16. Do not generate Markdown.
-
-17. Do not include explanations outside the JSON response.
+12. Do not rename existing functions, classes, routes, variables,
+    blueprints, or imports unless explicitly requested.
 
 
 ==================================================

@@ -58,8 +58,8 @@ def login():
     if not username or not password:
         return jsonify({"error": "Username and password are required"}), 400
 
-    if not username.isalpha():
-        return jsonify({"error": "Username must contain only alphabetic characters"}), 400
+    if not username.isalnum():
+        return jsonify({"error": "Username must contain only alphanumeric characters"}), 400
 
     return jsonify({
         "message": "User logged in successfully",

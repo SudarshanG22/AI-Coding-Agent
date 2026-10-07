@@ -4,15 +4,26 @@ from agent.change_generator import ChangeGenerator
 from agent.diff_generator import DiffGenerator
 from agent.file_writer import FileWriter
 from agent.test_runner import TestRunner
+from pathlib import Path
 
 
-PROJECT_PATH = "sample_project"
+# ==================================================
+# PROJECT PATH
+# ==================================================
 
+PROJECT_PATH = Path(__file__).resolve().parent.parent
+
+
+# ==================================================
+# BUILD CODEBASE CONTEXT
+# ==================================================
 
 def build_codebase_context(codebase):
+
     context = ""
 
     for filename, content in codebase.items():
+
         context += f"""
 ==================================================
 FILE: {filename}
@@ -25,7 +36,14 @@ FILE: {filename}
     return context
 
 
-def extract_relevant_files(analysis, available_files):
+# ==================================================
+# EXTRACT RELEVANT FILES
+# ==================================================
+
+def extract_relevant_files(
+    analysis,
+    available_files
+):
 
     relevant_files = []
 
@@ -36,18 +54,67 @@ def extract_relevant_files(analysis, available_files):
 
     for filename in available_files:
 
-        filename = filename.replace(
+        normalized_filename = filename.replace(
             "\\",
             "/"
         )
 
-        if filename in normalized_analysis:
+        if normalized_filename in normalized_analysis:
 
             relevant_files.append(
                 filename
             )
 
     return relevant_files
+
+
+# ==================================================
+# EXTRACT FILES THAT MUST BE MODIFIED
+# ==================================================
+
+def extract_files_to_modify(
+    analysis,
+    available_files
+):
+
+    files_to_modify = []
+
+    normalized_analysis = analysis.replace(
+        "\\",
+        "/"
+    )
+
+    lines = normalized_analysis.splitlines()
+
+    for line in lines:
+
+        line_lower = line.lower().strip()
+
+        if not line_lower.startswith("- modify:"):
+
+            continue
+
+        filename = line.split(
+            ":",
+            1
+        )[1].strip()
+
+        for available_file in available_files:
+
+            normalized_available = available_file.replace(
+                "\\",
+                "/"
+            )
+
+            if normalized_available.lower() == filename.lower():
+
+                if available_file not in files_to_modify:
+
+                    files_to_modify.append(
+                        available_file
+                    )
+
+    return files_to_modify
 
 
 # ==================================================
@@ -71,13 +138,24 @@ You are an AI Coding Agent.
 
 You are working on an existing software project.
 
-USER REQUEST:
+==================================================
+USER REQUEST
+==================================================
+
 {user_request}
 
-EXISTING CODEBASE:
+==================================================
+EXISTING CODEBASE
+==================================================
+
 {codebase_context}
 
-Analyze the user's coding request and the existing codebase.
+==================================================
+YOUR TASK
+==================================================
+
+Analyze the developer's request and the existing
+codebase.
 
 Return exactly these sections:
 
@@ -87,7 +165,16 @@ Explain what the developer wants.
 
 ## Relevant Files
 
-List ONLY files from the provided codebase that are relevant.
+For every relevant file, clearly classify whether
+the file must be modified or only read for context.
+
+Use EXACTLY this format:
+
+- MODIFY: path/to/file.py
+- READ ONLY: path/to/file.py
+
+Only use files that actually exist in the provided
+codebase.
 
 ## Step-by-Step Plan
 
@@ -95,16 +182,41 @@ Give a clear implementation plan.
 
 ## Expected Changes
 
-Explain what should be changed in each relevant file.
+Explain what should be changed in each file marked
+MODIFY.
+
+Do not say that changes have already been made.
 
 ## Validation
 
-Explain how the change should be tested.
+Explain how the requested change should be tested.
 
-IMPORTANT:
-- Do not modify files.
-- Do not pretend that changes have already been made.
-- Do not include files that do not exist in the provided codebase.
+==================================================
+IMPORTANT RULES
+==================================================
+
+1. Do not modify files.
+
+2. Do not pretend that changes have already been made.
+
+3. Do not invent files.
+
+4. Do not include files that do not exist.
+
+5. If a file needs to be changed to satisfy the
+   developer request, mark it MODIFY.
+
+6. If a file is only needed to understand the code,
+   mark it READ ONLY.
+
+7. If the developer explicitly names a file that
+   needs to be updated, mark that file MODIFY.
+
+8. Preserve the existing project structure.
+
+9. Do not add unrelated requirements.
+
+10. Do not refactor unrelated code.
 """
 
     gemini = GeminiService()
@@ -131,15 +243,41 @@ def generate_code_changes(
 
     codebase = reader.read_codebase()
 
-    available_files = codebase.keys()
+    available_files = list(
+        codebase.keys()
+    )
+
+    # ------------------------------------------------
+    # Extract files identified by analysis
+    # ------------------------------------------------
 
     relevant_files = extract_relevant_files(
         analysis,
         available_files
     )
 
-    # If the developer explicitly asks for a test,
+    # ------------------------------------------------
+    # Extract files explicitly marked MODIFY
+    # ------------------------------------------------
+
+    files_to_modify = extract_files_to_modify(
+        analysis,
+        available_files
+    )
+
+    # ------------------------------------------------
+    # If analysis used MODIFY correctly,
+    # use those files for code generation.
+    # ------------------------------------------------
+
+    if files_to_modify:
+
+        relevant_files = files_to_modify
+
+    # ------------------------------------------------
+    # If developer explicitly requested tests,
     # make sure an existing test file is included.
+    # ------------------------------------------------
 
     request_lower = user_request.lower()
 
@@ -159,11 +297,19 @@ def generate_code_changes(
                     test_file
                 )
 
+    # ------------------------------------------------
+    # Safety check
+    # ------------------------------------------------
+
     if not relevant_files:
 
         raise ValueError(
             "No relevant files were identified."
         )
+
+    # ------------------------------------------------
+    # Generate changes
+    # ------------------------------------------------
 
     change_generator = ChangeGenerator()
 
@@ -196,7 +342,9 @@ def generate_code_diff(
         analysis
     )
 
-    # Make sure Gemini generated something.
+    # ------------------------------------------------
+    # Make sure Gemini generated changes
+    # ------------------------------------------------
 
     if not changes.get("changes"):
 
@@ -204,8 +352,10 @@ def generate_code_diff(
             "The agent did not generate any code changes."
         )
 
-    # If the user requested a test,
-    # make sure Gemini generated a test-file change.
+    # ------------------------------------------------
+    # If user requested tests, make sure a test
+    # file was modified.
+    # ------------------------------------------------
 
     if "test" in user_request.lower():
 
@@ -224,6 +374,10 @@ def generate_code_diff(
                 "The user requested a test, but the agent "
                 "did not generate a test-file change."
             )
+
+    # ------------------------------------------------
+    # Generate diff
+    # ------------------------------------------------
 
     diff_generator = DiffGenerator()
 
