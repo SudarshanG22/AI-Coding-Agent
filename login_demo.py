@@ -1,5 +1,6 @@
 import streamlit as st
 import re
+from validation import validate_username
 
 
 def login_demo():
@@ -41,15 +42,13 @@ def login_demo():
 
     if login_button:
 
-        if not username or not password:
+        if not password:
             st.error("❌ Username and password are required.")
-
-        elif not username.isalnum():
-            st.error(
-                "❌ Username must contain only alphanumeric characters."
-            )
-
         else:
-            st.success(
-                f"✅ Login successful! Welcome, {username}."
-            )
+            is_valid, error_message = validate_username(username)
+            if not is_valid:
+                st.error(f"❌ {error_message}")
+            else:
+                st.success(
+                    f"✅ Login successful! Welcome, {username}."
+                )

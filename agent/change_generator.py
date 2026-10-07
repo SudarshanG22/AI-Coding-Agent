@@ -14,7 +14,6 @@ class ChangeGenerator:
     # ========================================================
 
     def _extract_json(self, response):
-
         response = response.strip()
 
         match = re.search(
@@ -27,7 +26,6 @@ class ChangeGenerator:
             response = match.group(1).strip()
 
         if response.startswith("```") and response.endswith("```"):
-
             lines = response.splitlines()
 
             if len(lines) >= 3:
@@ -43,8 +41,12 @@ class ChangeGenerator:
         self,
         changes,
         allowed_files,
-        user_request
+        user_request,
+        create_files=None
     ):
+
+        if create_files is None:
+            create_files = []
 
         if not isinstance(changes, dict):
             raise ValueError(
@@ -66,10 +68,16 @@ class ChangeGenerator:
                 "Gemini did not generate any code changes."
             )
 
-        # Normalize Windows and Linux path separators
+        # Normalize existing files
         normalized_allowed_files = {
-            str(file).replace("\\", "/")
+            str(file).replace("\\", "/").strip()
             for file in allowed_files
+        }
+
+        # Normalize explicitly detected new files
+        normalized_create_files = {
+            str(file).replace("\\", "/").strip()
+            for file in create_files
         }
 
         for index, change in enumerate(changes["changes"]):
@@ -79,29 +87,128 @@ class ChangeGenerator:
                     f"Change #{index + 1} is not a valid object."
                 )
 
-            required_fields = [
-                "file",
-                "reason",
-                "new_content_lines"
-            ]
+            # ------------------------------------------------
+            # Required fields
+            # ------------------------------------------------
 
-            for field in required_fields:
+            if "file" not in change:
+                raise ValueError(
+                    f"Change #{index + 1} is missing required field: file"
+                )
 
-                if field not in change:
+            if "reason" not in change:
+                raise ValueError(
+                    f"Change #{index + 1} is missing required field: reason"
+                )
+
+            if "new_content_lines" not in change:
+
+                # Support Gemini returning new_content directly
+                if "new_content" in change:
+                    content = change["new_content"]
+
+                    if not isinstance(content, str):
+                        raise ValueError(
+                            f"'new_content' for change #{index + 1} "
+                            "must be a string."
+                        )
+
+                    change["new_content_lines"] = content.splitlines()
+
+                else:
                     raise ValueError(
-                        f"Change #{index + 1} is missing required field: {field}"
+                        f"Change #{index + 1} is missing "
+                        "required field: new_content_lines"
                     )
 
-            filename = str(change["file"]).replace("\\", "/")
+            # ------------------------------------------------
+            # Normalize filename
+            # ------------------------------------------------
 
-            if filename not in normalized_allowed_files:
+            filename = str(change["file"]).replace("\\", "/").strip()
+
+            if not filename:
                 raise ValueError(
-                    f"Gemini attempted to modify an unauthorized file: {filename}"
+                    f"Change #{index + 1} contains an empty filename."
                 )
+
+            # ------------------------------------------------
+            # Determine action
+            # ------------------------------------------------
+
+            requested_action = str(
+                change.get("action", "")
+            ).upper().strip()
+
+            # =================================================
+            # IMPORTANT FIX
+            #
+            # If Gemini does not provide CREATE but the file
+            # is not an existing file, automatically treat it
+            # as CREATE.
+            #
+            # This prevents:
+            #
+            # Gemini tried to modify unknown file: validation.py
+            #
+            # =================================================
+
+            if filename in normalized_allowed_files:
+
+                # Existing file must be MODIFY
+                action = "MODIFY"
+
+            else:
+
+                # File does not exist in current codebase.
+                # Therefore it must be a CREATE operation.
+                action = "CREATE"
+
+            # If Gemini explicitly says MODIFY for a new file,
+            # automatically correct it to CREATE.
+            if requested_action == "CREATE":
+                action = "CREATE"
+
+            elif requested_action == "MODIFY":
+                if filename in normalized_allowed_files:
+                    action = "MODIFY"
+                else:
+                    action = "CREATE"
+
+            # ------------------------------------------------
+            # Validate CREATE path
+            # ------------------------------------------------
+
+            if action == "CREATE":
+
+                # Prevent absolute paths
+                if filename.startswith("/"):
+                    raise ValueError(
+                        f"Invalid new file path: {filename}"
+                    )
+
+                # Windows absolute path
+                if len(filename) >= 2 and filename[1] == ":":
+                    raise ValueError(
+                        f"Invalid new file path: {filename}"
+                    )
+
+                # Prevent path traversal
+                path_parts = filename.split("/")
+
+                if ".." in path_parts:
+                    raise ValueError(
+                        f"Invalid new file path: {filename}"
+                    )
+
+            # ------------------------------------------------
+            # Validate content
+            # ------------------------------------------------
 
             if not isinstance(change["new_content_lines"], list):
                 raise ValueError(
-                    f"'new_content_lines' for {filename} must be a list."
+                    f"'new_content_lines' for {filename} "
+                    "must be a list."
                 )
 
             for line in change["new_content_lines"]:
@@ -111,43 +218,25 @@ class ChangeGenerator:
                         f"Every line in {filename} must be a string."
                     )
 
+            # ------------------------------------------------
+            # Save normalized change
+            # ------------------------------------------------
+
             change["file"] = filename
+            change["action"] = action
 
             change["new_content"] = "\n".join(
                 change.pop("new_content_lines")
             )
 
-        # ====================================================
-        # TEST REQUIREMENT VALIDATION
-        # ====================================================
-
-        request_lower = user_request.lower()
-
-        test_requested = any(
-            keyword in request_lower
-            for keyword in [
-                "test",
-                "pytest",
-                "unit test",
-                "testing"
-            ]
-        )
-
-        if test_requested:
-
-            test_change_found = any(
-                (
-                    "test" in change["file"].lower()
-                    or "tests/" in change["file"].lower()
-                    or "/tests/" in change["file"].lower()
-                )
-                for change in changes["changes"]
-            )
-
-            if not test_change_found:
-                raise ValueError(
-                    "The user requested a test, but Gemini did not generate a test-file change."
-                )
+        # Test-file validation is handled in agent.py.
+        #
+        # Do not check "test" in user_request here because
+        # phrases such as:
+        #
+        # "modify tests only if required"
+        #
+        # do not mean that tests were explicitly requested.
 
         return changes
 
@@ -159,8 +248,16 @@ class ChangeGenerator:
         self,
         user_request,
         codebase,
-        relevant_files
+        relevant_files,
+        create_files=None
     ):
+
+        if create_files is None:
+            create_files = []
+
+        # ----------------------------------------------------
+        # Build selected codebase
+        # ----------------------------------------------------
 
         selected_code = ""
 
@@ -177,6 +274,37 @@ FILE: {filename}
 
 """
 
+        # ----------------------------------------------------
+        # Build information about possible new files
+        # ----------------------------------------------------
+
+        allowed_create_files = []
+
+        for filename in create_files:
+
+            normalized = str(filename).replace(
+                "\\",
+                "/"
+            ).strip()
+
+            if (
+                normalized
+                and normalized not in allowed_create_files
+            ):
+                allowed_create_files.append(normalized)
+
+        create_section = "\n".join(
+            f"- CREATE: {filename}"
+            for filename in allowed_create_files
+        )
+
+        if not create_section:
+            create_section = "No specific new file was detected."
+
+        # ----------------------------------------------------
+        # Gemini prompt
+        # ----------------------------------------------------
+
         prompt = f"""
 You are an AI Coding Agent working on an existing software project.
 
@@ -186,13 +314,17 @@ DEVELOPER REQUEST
 
 {user_request}
 
-
 ==================================================
-RELEVANT FILES
+RELEVANT EXISTING FILES
 ==================================================
 
 {selected_code}
 
+==================================================
+POSSIBLE NEW FILES
+==================================================
+
+{create_section}
 
 ==================================================
 YOUR JOB
@@ -205,14 +337,13 @@ The developer's request is the SOURCE OF TRUTH.
 
 Do not add requirements that the developer did not request.
 
-
 ==================================================
-VERY IMPORTANT SCOPE RULE
+IMPORTANT SCOPE RULE
 ==================================================
 
-You MUST follow the developer request exactly.
+Follow the developer request exactly.
 
-DO NOT invent additional requirements.
+DO NOT invent unrelated requirements.
 
 DO NOT add unrelated functionality.
 
@@ -222,119 +353,62 @@ DO NOT add unrelated API behavior.
 
 DO NOT add unrelated edge cases.
 
-DO NOT add tests for behavior that the developer did not request.
-
 DO NOT refactor unrelated code.
 
 DO NOT improve unrelated code.
 
-DO NOT add extra features just because they may be considered
-good programming practice.
+DO NOT add extra features.
 
-For example:
+Make the SMALLEST possible change.
 
-If the developer asks:
+==================================================
+FILE RULES
+==================================================
 
-"Add validation for empty or whitespace-only title and write
-a pytest test."
+1. Existing files should be returned as MODIFY.
 
-Then implement ONLY:
+2. A file that does not already exist should be returned as CREATE.
 
-1. Empty title validation.
-2. Whitespace-only title validation.
-3. Tests for those requested cases.
+3. If a shared helper module is required by the developer
+   request, create it.
 
-Do NOT additionally implement:
+4. Do not create unrelated files.
 
-- Missing JSON validation.
-- Invalid JSON validation.
-- Missing title validation unless explicitly requested.
-- Authentication.
-- Authorization.
-- Database changes.
-- Extra API validation.
-- Unrelated success tests.
-- Other edge cases.
+5. Preserve all existing functionality.
 
-Stay within the exact scope of the request.
+6. Include complete content for every modified file.
 
+7. Include complete content for every newly created file.
+
+8. Do not remove existing functions.
+
+9. Do not rename existing functions.
+
+10. Do not remove existing routes.
+
+11. Do not remove existing database operations.
+
+12. Preserve unrelated imports and functionality.
 
 ==================================================
 TEST RULES
 ==================================================
 
-If the developer requests tests:
+If the developer explicitly requests tests:
 
 1. Modify the existing appropriate test file.
 
-2. Write tests ONLY for behavior explicitly requested.
+2. Write tests ONLY for the requested behavior.
 
-3. Do not invent additional test cases.
+3. Preserve existing tests.
 
-4. Preserve existing tests unless they conflict with the
-requested change.
+4. Use the existing "client" pytest fixture
+   for Flask API tests.
 
-5. Use the existing "client" pytest fixture for Flask API tests.
+5. Tests must be runnable using pytest.
 
-6. Tests must be runnable using pytest.
-
-7. Do not create new fixtures unless absolutely necessary.
-
-8. Do not test unrelated behavior.
-
-9. Do not add a test simply because it is a common edge case.
-
-10. The test must directly verify the requested behavior.
-
-
-==================================================
-CODE RULES
-==================================================
-
-1. Only modify files listed under RELEVANT FILES.
-
-2. Never invent a new file.
-
-3. Never modify unrelated files.
-
-4. Preserve the existing project structure.
-
-5. Include complete replacement content for every modified file.
-
-6. Make the SMALLEST possible change required by the developer request.
-
-7. Preserve every existing function, route, import, variable,
-   database operation, and behavior that is unrelated to the request.
-
-8. NEVER rewrite or simplify an entire file when only a small
-   part of the file needs to change.
-
-9. NEVER remove existing functionality unless the developer
-   explicitly requested its removal.
-
-10. Before returning each modified file, compare it mentally
-    with the original file and make sure unrelated code remains
-    unchanged.
-
-11. If the requested change affects only one condition,
-    expression, function, or test, modify only that part while
-    preserving the rest of the file exactly.
-
-12. Do not rename existing functions, classes, routes, variables,
-    blueprints, or imports unless explicitly requested.
-
-
-==================================================
-EXISTING PROJECT INFORMATION
-==================================================
-
-The project contains an existing pytest fixture named
-"client" inside:
-
-tests/conftest.py
-
-Use this fixture when testing Flask API endpoints.
-
+If the developer says tests should be modified
+"only if required", do NOT automatically modify tests.
 
 ==================================================
 RETURN FORMAT
@@ -347,17 +421,33 @@ Use exactly this structure:
 {{
     "changes": [
         {{
+            "action": "MODIFY",
             "file": "routes.py",
             "reason": "Explain why this file changes",
             "new_content_lines": [
                 "line 1",
-                "line 2",
-                "line 3"
+                "line 2"
+            ]
+        }},
+        {{
+            "action": "CREATE",
+            "file": "validation.py",
+            "reason": "Explain why this new file is required",
+            "new_content_lines": [
+                "line 1",
+                "line 2"
             ]
         }}
     ]
 }}
 
+The "action" must be either:
+
+MODIFY
+
+or
+
+CREATE
 
 ==================================================
 NEW_CONTENT_LINES RULE
@@ -365,7 +455,7 @@ NEW_CONTENT_LINES RULE
 
 "new_content_lines" MUST be an array.
 
-Every array element MUST contain exactly ONE line.
+Every array element must contain exactly ONE line.
 
 Do not put multiple lines inside one array element.
 
@@ -375,48 +465,54 @@ Do not use ```json.
 
 Do not add text before or after the JSON.
 
-
 ==================================================
 FINAL SELF-CHECK
 ==================================================
 
-Before returning the JSON, verify:
+Before returning JSON verify:
 
-1. The JSON is valid.
+1. JSON is valid.
 
-2. Every requested code change is included.
+2. Every requested change is included.
 
-3. Every requested test is included.
+3. No unrelated functionality was added.
 
-4. No unrelated functionality was added.
+4. Existing functionality is preserved.
 
-5. No unrelated tests were added.
+5. Every existing file is marked MODIFY.
 
-6. Every modified file exists in RELEVANT FILES.
+6. Every new file is marked CREATE.
 
-7. Existing tests are preserved.
+7. All imports are present.
 
-8. All imports are present.
+8. No undefined functions exist.
 
-9. No undefined fixtures exist.
+9. No undefined variables exist.
 
-10. No undefined functions or variables exist.
+10. Test changes are included only when required.
 
-11. Generated tests can run with pytest.
-
-12. The implementation directly satisfies the developer request.
-
-13. The implementation does NOT introduce additional
-requirements that were not requested.
+11. The implementation directly satisfies the developer request.
 """
+
+        # ----------------------------------------------------
+        # Call Gemini
+        # ----------------------------------------------------
 
         response = self.gemini.generate_json_response(prompt)
 
+        # ----------------------------------------------------
+        # Parse JSON
+        # ----------------------------------------------------
+
         try:
 
-            cleaned_response = self._extract_json(response)
+            cleaned_response = self._extract_json(
+                response
+            )
 
-            changes = json.loads(cleaned_response)
+            changes = json.loads(
+                cleaned_response
+            )
 
         except json.JSONDecodeError as error:
 
@@ -426,10 +522,15 @@ requirements that were not requested.
                 f"Gemini response:\n{response}"
             )
 
+        # ----------------------------------------------------
+        # Validate changes
+        # ----------------------------------------------------
+
         validated_changes = self._validate_changes(
             changes,
             relevant_files,
-            user_request
+            user_request,
+            create_files=allowed_create_files
         )
 
         return validated_changes

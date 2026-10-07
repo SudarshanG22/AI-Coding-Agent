@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from database import get_db_connection
+from validation import validate_username
 
 task_routes = Blueprint("task_routes", __name__)
 
@@ -55,11 +56,12 @@ def login():
     username = data.get("username", "")
     password = data.get("password", "")
 
-    if not username or not password:
+    if not password:
         return jsonify({"error": "Username and password are required"}), 400
 
-    if not username.isalnum():
-        return jsonify({"error": "Username must contain only alphanumeric characters"}), 400
+    is_valid, error_message = validate_username(username)
+    if not is_valid:
+        return jsonify({"error": error_message}), 400
 
     return jsonify({
         "message": "User logged in successfully",
