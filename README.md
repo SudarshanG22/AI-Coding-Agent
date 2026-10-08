@@ -10,7 +10,7 @@ The project is built as a small end-to-end AI coding agent using Streamlit and G
 
 **Deployed Application:**
 
-https://ai-coding-agent-bfa2s5yihfnjqj7zsxcnc2c.streamlit.app
+https://ai-coding-agent-bfa2s5yihfnjqj7zsxcn2c.streamlit.app/
 
 ---
 
