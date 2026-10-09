@@ -48,9 +48,18 @@ The Login Demo validates:
 - Password
 - Alphabetic-only usernames
 
+### Limitations of the Project 
+
+* The agent currently works with the bundled sample project rather than arbitrary code repositories.
+* AI operations depend on Gemini API availability and quota.
+* AI-generated code requires human review and validation before production use.
+* Automated tests do not guarantee the correctness of every possible generated code change.
+
 Examples:
 
 ```text
 Sudarshan       → ✅ Login successful
 Sudarshan123    → ❌ Username validation error
 Sudarshan@      → ❌ Username validation error
+
+
